@@ -7,6 +7,8 @@
 
 #import "ImageCropPicker.h"
 
+@import MobileCoreServices;
+
 #define ERROR_PICKER_CANNOT_RUN_CAMERA_ON_SIMULATOR_KEY @"E_PICKER_CANNOT_RUN_CAMERA_ON_SIMULATOR"
 #define ERROR_PICKER_CANNOT_RUN_CAMERA_ON_SIMULATOR_MSG @"Cannot run camera on simulator"
 
@@ -147,6 +149,15 @@ RCT_EXPORT_METHOD(openCamera:(NSDictionary *)options
         picker.sourceType = UIImagePickerControllerSourceTypeCamera;
         if ([[self.options objectForKey:@"useFrontCamera"] boolValue]) {
             picker.cameraDevice = UIImagePickerControllerCameraDeviceFront;
+        }
+        
+        NSString *mediaType = [self.options objectForKey:@"mediaType"];
+        if ([mediaType isEqualToString:@"photo"]) {
+            picker.mediaTypes = @[(NSString *)kUTTypeImage];
+        } else if ([mediaType isEqualToString:@"video"]) {
+            picker.mediaTypes = @[(NSString *)kUTTypeMovie];
+        } else {
+            picker.mediaTypes = @[(NSString *)kUTTypeImage, (NSString *)kUTTypeMovie];
         }
         
         dispatch_async(dispatch_get_main_queue(), ^{
