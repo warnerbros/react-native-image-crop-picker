@@ -44,7 +44,7 @@ export default class App extends Component {
     }).then(image => {
       console.log('received image', image);
       this.setState({
-        image: {uri: image.path, width: image.width, height: image.height},
+        image: {uri: image.path, width: image.width, height: image.height, mime: image.mime},
         images: null
       });
     }).catch(e => alert(e));
