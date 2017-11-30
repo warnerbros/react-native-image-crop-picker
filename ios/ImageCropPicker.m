@@ -15,6 +15,9 @@
 #define ERROR_PICKER_NO_CAMERA_PERMISSION_KEY @"E_PICKER_NO_CAMERA_PERMISSION"
 #define ERROR_PICKER_NO_CAMERA_PERMISSION_MSG @"User did not grant camera permission."
 
+#define ERROR_PICKER_NO_MICROPHONE_PERMISSION_KEY @"E_PICKER_NO_MICROPHONE_PERMISSION"
+#define ERROR_PICKER_NO_MICROPHONE_PERMISSION_MSG @"User did not grant microphone permission."
+
 #define ERROR_PICKER_UNAUTHORIZED_KEY @"E_PERMISSION_MISSING"
 #define ERROR_PICKER_UNAUTHORIZED_MSG @"Cannot access images. Please allow access if you want to be able to select images."
 
@@ -61,6 +64,7 @@ RCT_EXPORT_MODULE();
                                 @"waitAnimationEnd": @YES,
                                 @"height": @200,
                                 @"useFrontCamera": @NO,
+                                @"requireMicrophone": @NO,
                                 @"compressImageQuality": @1,
                                 @"compressVideoPreset": @"MediumQuality",
                                 @"loadingLabelText": @"Processing assets...",
@@ -95,10 +99,28 @@ RCT_EXPORT_MODULE();
     if (status == AVAuthorizationStatusAuthorized) {
         callback(YES);
         return;
-    } else if (status == AVAuthorizationStatusNotDetermined){
+    }
+    
+    if (status == AVAuthorizationStatusNotDetermined){
         [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
             callback(granted);
-            return;
+        }];
+    } else {
+        callback(NO);
+    }
+}
+
+- (void)checkMicrophonePermissions:(void(^)(BOOL granted))callback
+{
+    AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+    if (status == AVAuthorizationStatusAuthorized) {
+        callback(YES);
+        return;
+    }
+    
+    if (status == AVAuthorizationStatusNotDetermined) {
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+            callback(granted);
         }];
     } else {
         callback(NO);
@@ -143,26 +165,42 @@ RCT_EXPORT_METHOD(openCamera:(NSDictionary *)options
             return;
         }
         
-        UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-        picker.delegate = self;
-        picker.allowsEditing = NO;
-        picker.sourceType = UIImagePickerControllerSourceTypeCamera;
-        if ([[self.options objectForKey:@"useFrontCamera"] boolValue]) {
-            picker.cameraDevice = UIImagePickerControllerCameraDeviceFront;
-        }
-        
         NSString *mediaType = [self.options objectForKey:@"mediaType"];
-        if ([mediaType isEqualToString:@"photo"]) {
-            picker.mediaTypes = @[(NSString *)kUTTypeImage];
-        } else if ([mediaType isEqualToString:@"video"]) {
-            picker.mediaTypes = @[(NSString *)kUTTypeMovie];
-        } else {
-            picker.mediaTypes = @[(NSString *)kUTTypeImage, (NSString *)kUTTypeMovie];
-        }
+        void (^launchPicker)(void) = ^(void) {
+            UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+            picker.delegate = self;
+            picker.allowsEditing = NO;
+            picker.sourceType = UIImagePickerControllerSourceTypeCamera;
+            if ([[self.options objectForKey:@"useFrontCamera"] boolValue]) {
+                picker.cameraDevice = UIImagePickerControllerCameraDeviceFront;
+            }
+            
+            if ([mediaType isEqualToString:@"photo"]) {
+                picker.mediaTypes = @[(NSString *)kUTTypeImage];
+            } else if ([mediaType isEqualToString:@"video"]) {
+                picker.mediaTypes = @[(NSString *)kUTTypeMovie];
+            } else {
+                picker.mediaTypes = @[(NSString *)kUTTypeImage, (NSString *)kUTTypeMovie];
+            }
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[self getRootVC] presentViewController:picker animated:YES completion:nil];
+            });
+        };
         
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[self getRootVC] presentViewController:picker animated:YES completion:nil];
-        });
+        BOOL microphoneRequired = [[self.options objectForKey:@"requireMicrophone"] boolValue];
+        if (microphoneRequired && ([mediaType isEqualToString:@"video"] || [mediaType isEqualToString:@"any"])) {
+            [self checkMicrophonePermissions:^(BOOL granted) {
+                if (!granted) {
+                    self.reject(ERROR_PICKER_NO_MICROPHONE_PERMISSION_KEY, ERROR_PICKER_NO_MICROPHONE_PERMISSION_MSG, nil);
+                    return;
+                }
+                
+                launchPicker();
+            }];
+        } else {
+            launchPicker();
+        }
     }];
 #endif
 }

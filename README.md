@@ -104,6 +104,7 @@ ImagePicker.clean().then(() => {
 | waitAnimationEnd (ios only)             |           bool (default true)            | Promise will resolve/reject once ViewController `completion` block is called |
 | smartAlbums (ios only)                  | array (default ['UserLibrary', 'PhotoStream', 'Panoramas', 'Videos', 'Bursts']) | List of smart albums to choose from      |
 | useFrontCamera (ios only)               |           bool (default false)           | Whether to default to the front/'selfie' camera when opened |
+| requireMicrophone (ios only)            |           bool (default false)           | Whether to return an error if the user denies microphone access |
 | compressVideoPreset (ios only)          |      string (default MediumQuality)      | Choose which preset will be used for video compression |
 | compressImageMaxWidth                   |          number (default none)           | Compress image with maximum width        |
 | compressImageMaxHeight                  |          number (default none)           | Compress image with maximum height       |
