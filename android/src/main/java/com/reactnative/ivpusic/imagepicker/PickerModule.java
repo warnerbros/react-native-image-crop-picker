@@ -2,7 +2,10 @@ package com.reactnative.ivpusic.imagepicker;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.ClipData;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -11,6 +14,7 @@ import android.graphics.Color;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.support.v4.app.ActivityCompat;
@@ -64,7 +68,11 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
     private static final String E_PERMISSIONS_MISSING = "E_PERMISSION_MISSING";
     private static final String E_ERROR_WHILE_CLEANING_FILES = "E_ERROR_WHILE_CLEANING_FILES";
 
-    private String mediaType = "any";
+    private static final String MEDIA_TYPE_PHOTO = "photo";
+    private static final String MEDIA_TYPE_VIDEO = "video";
+    private static final String MEDIA_TYPE_ANY = "any";
+
+    private String mediaType = MEDIA_TYPE_ANY;
     private boolean multiple = false;
     private boolean includeBase64 = false;
     private boolean includeExif = false;
@@ -283,20 +291,34 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
         });
     }
 
-    private void initiateCamera(Activity activity) {
+    private void initiateCamera(final Activity activity) {
 
         try {
             int requestCode = CAMERA_PICKER_REQUEST;
-            Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            if (mediaType.equals(MEDIA_TYPE_ANY)) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+                builder.setTitle("Select Camera")
+                        .setItems(new String[]{ "Take a Photo", "Take a Video" }, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                mediaType = (which == 0 ? MEDIA_TYPE_PHOTO : MEDIA_TYPE_VIDEO);
+                                initiateCamera(activity);
+                            }
+                        });
+                builder.create().show();
+                return;
+            }
 
-            File imageFile = createImageFile();
+            String intentAction = mediaType.equals(MEDIA_TYPE_VIDEO) ? MediaStore.ACTION_VIDEO_CAPTURE : MediaStore.ACTION_IMAGE_CAPTURE;
+            Intent cameraIntent = new Intent(intentAction);
+
+            File mediaFile = createMediaFile(mediaType);
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                mCameraCaptureURI = Uri.fromFile(imageFile);
+                mCameraCaptureURI = Uri.fromFile(mediaFile);
             } else {
                 mCameraCaptureURI = FileProvider.getUriForFile(activity,
                         activity.getApplicationContext().getPackageName() + ".provider",
-                        imageFile);
+                        mediaFile);
             }
 
             cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, mCameraCaptureURI);
@@ -317,9 +339,9 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
         try {
             final Intent galleryIntent = new Intent(Intent.ACTION_PICK);
 
-            if (cropping || mediaType.equals("photo")) {
+            if (cropping || mediaType.equals(MEDIA_TYPE_PHOTO)) {
                 galleryIntent.setType("image/*");
-            } else if (mediaType.equals("video")) {
+            } else if (mediaType.equals(MEDIA_TYPE_VIDEO)) {
                 galleryIntent.setType("video/*");
             } else {
                 galleryIntent.setType("*/*");
@@ -661,7 +683,14 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
             } else {
                 try {
                     resultCollector.setWaitCount(1);
-                    resultCollector.notifySuccess(getSelection(activity, uri, true));
+
+                    String path = resolveRealPath(activity, uri, true);
+                    String mime = getMimeType(path);
+                    if (mime != null && mime.startsWith("video/")) {
+                        getVideo(activity, path, mime);
+                    } else {
+                        resultCollector.notifySuccess(getSelection(activity, uri, true));
+                    }
                 } catch (Exception ex) {
                     resultCollector.notifyProblem(E_NO_IMAGE_DATA_FOUND, ex.getMessage());
                 }
@@ -707,9 +736,11 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
                 || activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY);
     }
 
-    private File createImageFile() throws IOException {
+    private File createMediaFile(String mediaType) throws IOException {
+        String fileNamePrefix = (mediaType.equals(MEDIA_TYPE_VIDEO) ? "video-" : "image-");
+        String fileExtension = (mediaType.equals(MEDIA_TYPE_VIDEO) ? ".mp4" : ".jpg");
 
-        String imageFileName = "image-" + UUID.randomUUID().toString();
+        String mediaFileName = fileNamePrefix + UUID.randomUUID().toString();
         File path = Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_PICTURES);
 
@@ -717,12 +748,11 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
             path.mkdirs();
         }
 
-        File image = File.createTempFile(imageFileName, ".jpg", path);
+        File mediaFile = File.createTempFile(mediaFileName, fileExtension, path);
 
         // Save a file: path for use with ACTION_VIEW intents
-        mCurrentPhotoPath = "file:" + image.getAbsolutePath();
+        mCurrentPhotoPath = "file:" + mediaFile.getAbsolutePath();
 
-        return image;
-
+        return mediaFile;
     }
 }
