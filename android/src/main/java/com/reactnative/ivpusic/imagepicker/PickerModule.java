@@ -309,7 +309,7 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
                 builder.setTitle("Select Camera")
                         .setItems(new String[]{ "Take a Photo", "Take a Video" }, new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int which) {
-                                mediaType = (which == 0 ? MEDIA_TYPE_PHOTO : MEDIA_TYPE_VIDEO);
+                                mediaType = (which == 0 ? "photo" : "video");
                                 initiateCamera(activity);
                             }
                         });
